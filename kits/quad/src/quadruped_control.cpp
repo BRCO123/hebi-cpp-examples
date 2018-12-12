@@ -112,6 +112,9 @@ int main(int argc, char** argv)
       translation_velocity_cmd = input->getTranslationVelocityCmd();
       rotation_velocity_cmd = input->getRotationVelocityCmd();
 
+
+      MatrixXd euler;
+      Eigen::Quaterniond quat;
       // control state machine (do not put actual execution logic here)
       // std::cout << "|Time: " << elapsed_time.count() <<  "| my current state is: " << cur_ctrl_state <<std::endl;
       switch (cur_ctrl_state)
@@ -179,7 +182,7 @@ int main(int argc, char** argv)
         case QUAD_CTRL_NORMAL_LEFT:
           state_curr_time = std::chrono::steady_clock::now();
           state_run_time = std::chrono::duration_cast<std::chrono::duration<double>>(state_curr_time - state_enter_time);
-
+          quadruped -> startIMUFilter();
           // some debug print to show so far all implementation is correct
           // grav_vec = quadruped -> getGravityDirection();
           // std::cout << "Gravity Direction: " << grav_vec(0) << " "
@@ -190,12 +193,18 @@ int main(int argc, char** argv)
           //                            << leg_angles(1) << " "
           //                            << leg_angles(2) << std::endl;
 
-          quadruped -> runTest(Quadruped::SwingMode::swing_mode_virtualLeg1, state_run_time.count(), leg_swing_time);
+          //quadruped -> runTest(Quadruped::SwingMode::swing_mode_virtualLeg1, state_run_time.count(), leg_swing_time);
+          quat = quadruped -> getOrientation();
+          euler = quat.toRotationMatrix().eulerAngles(0,1,2);
+          std::cout << "Euler from quaterinon roll pitch yaw: " << std::endl << euler(0)  << " "
+                                                                << euler(1)  << " "
+                                                                << euler(2)  << " "
+                                                                << std::endl;
           if (state_run_time.count() >= leg_swing_time)
           {
             cur_ctrl_state = QUAD_CTRL_NORMAL_RIGHT;
             state_enter_time = std::chrono::steady_clock::now(); 
-            quadruped -> prepareTrajectories(Quadruped::SwingMode::swing_mode_virtualLeg2, leg_swing_time);
+            //quadruped -> prepareTrajectories(Quadruped::SwingMode::swing_mode_virtualLeg2, leg_swing_time);
           }
           break;
 
@@ -203,13 +212,22 @@ int main(int argc, char** argv)
           state_curr_time = std::chrono::steady_clock::now();
           state_run_time = std::chrono::duration_cast<std::chrono::duration<double>>(state_curr_time - state_enter_time);
 
-
-          quadruped -> runTest(Quadruped::SwingMode::swing_mode_virtualLeg2, state_run_time.count(), leg_swing_time);
+          quat = quadruped -> getOrientation();
+          euler = quat.toRotationMatrix().eulerAngles(0,1,2);
+          // std::cout << "quaterinon: " << std::endl << quat.w() << " "
+          //                                          << quat.x() << " " 
+          //                                          << quat.y() << " " 
+          //                                          << quat.z() << " "  << std::endl;
+          std::cout << "Euler from quaterinon roll pitch yaw: " << std::endl << euler(0)  << " "
+                                                                << euler(1)  << " "
+                                                                << euler(2)  << " "
+                                                                << std::endl;
+          //quadruped -> runTest(Quadruped::SwingMode::swing_mode_virtualLeg2, state_run_time.count(), leg_swing_time);
           if (state_run_time.count() >= leg_swing_time)
           {
             cur_ctrl_state = QUAD_CTRL_NORMAL_LEFT;
             state_enter_time = std::chrono::steady_clock::now(); 
-            quadruped -> prepareTrajectories(Quadruped::SwingMode::swing_mode_virtualLeg1, leg_swing_time);
+            //quadruped -> prepareTrajectories(Quadruped::SwingMode::swing_mode_virtualLeg1, leg_swing_time);
           }
           
           break;

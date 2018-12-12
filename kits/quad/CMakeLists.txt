@@ -50,6 +50,7 @@ SET(SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/src/input/input_manager_mobile_io.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/xml_util/pugixml.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/xml_util/xml_helpers.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/util/MadgwickAHRS.cpp
 )
 
 add_executable(quadruped_control ${SOURCES} $<TARGET_OBJECTS:quadruped_core>)

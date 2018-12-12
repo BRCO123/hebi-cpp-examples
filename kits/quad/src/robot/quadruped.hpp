@@ -15,6 +15,7 @@
 
 #include "quadruped_parameters.hpp"
 #include "quadruped_leg.hpp"
+#include "../util/MadgwickAHRS.hpp"
 
 /* 
   This class defines a quadruped robot using Hebi's daisy robot (or Mat6)
@@ -68,8 +69,10 @@ class Quadruped
     void runTest(SwingMode mode, double curr_time, double total_time);
     void prepareTrajectories(SwingMode mode, double leg_swing_time);
 
-
+    void startIMUFilter() {updateIMUFilter = true;}
     bool isExecution() {return is_exec_traj;}
+
+    Eigen::Quaterniond getOrientation();
 
     void setCommand(int index, const VectorXd* angles, const VectorXd* vels, const VectorXd* torques);
     void sendCommand();
@@ -81,11 +84,15 @@ class Quadruped
     std::shared_ptr<Group> group_;
     GroupCommand cmd_;
 
+    // filter to get orientation
+    MadgwickAHRS imu_filter;
+
     // leg info
     std::vector<std::unique_ptr<QuadLeg> > legs_;
     Eigen::VectorXd joint_angles; //get joint angles from fbk and put them into leg
 
     std::chrono::time_point<std::chrono::steady_clock> latest_fbk_time;
+    std::chrono::time_point<std::chrono::steady_clock> prev_fbk_time;
     QuadrupedParameters params_;
 
     // feedback physical quantities
@@ -94,6 +101,9 @@ class Quadruped
     // two locks to get feedback
     std::mutex fbk_lock_;
     std::mutex grav_lock_;
+
+    // internal state control
+    bool updateIMUFilter;
 
     // planner trajectories
     std::vector<std::shared_ptr<trajectory::Trajectory>> startup_trajectories;

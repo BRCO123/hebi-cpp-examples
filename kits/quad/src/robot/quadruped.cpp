@@ -36,6 +36,7 @@ namespace hebi {
   Quadruped::Quadruped(std::shared_ptr<Group> group, const QuadrupedParameters& params)
   : group_(group), params_(params), cmd_(group_ ? group_->size() : 1)
   {
+    updateIMUFilter = false;
     Eigen::Vector3d zero_vec = Eigen::Vector3d::Zero();
     legs_.emplace_back(new QuadLeg(30.0 * M_PI / 180.0, 0.2375, zero_vec, params, 0, QuadLeg::LegConfiguration::Left));
     legs_.emplace_back(new QuadLeg(-30.0 * M_PI / 180.0, 0.2375, zero_vec, params, 1, QuadLeg::LegConfiguration::Right));
@@ -58,6 +59,7 @@ namespace hebi {
 
         std::lock_guard<std::mutex> guard(fbk_lock_);
         latest_fbk_time = std::chrono::steady_clock::now();
+        std::chrono::duration<double> dt = std::chrono::duration_cast<std::chrono::duration<double>>(latest_fbk_time - prev_fbk_time);
         assert(fbk.size() == num_joints_);
         for (int i = 0; i < num_legs_; ++i)
         {
@@ -87,6 +89,34 @@ namespace hebi {
           gravity_direction_ = avg_grav;
         }
 
+        // update complimentary filter
+        if (updateIMUFilter)
+        {
+          Eigen::Vector3d acc_ave(0,0,0), gyro_ave(0,0,0);
+          int num_count = 0;
+          for (int i = 0; i < num_legs_; ++i)
+          {
+            Eigen::Matrix4d trans = legs_[i]->getKinematics().getBaseFrame();
+            hebi::Vector3f acc = fbk[i * num_joints_per_leg_].imu().accelerometer().get();
+            Eigen::Vector3d acc_eigen(acc.getX(), acc.getY(), acc.getZ());
+            acc_eigen = trans.topLeftCorner<3,3>() * acc_eigen + trans.topRightCorner<3,1>(); // according to madgwick paper, they take g = [0;0;1], while hebi module measures raw acceleration which is in the reverse direction
+
+            acc_eigen /= acc_eigen.norm();
+            acc_ave =  acc_ave + acc_eigen;
+
+            hebi::Vector3f gyro = fbk[i * num_joints_per_leg_].imu().gyro().get();
+            Eigen::Vector3d gyro_eigen(gyro.getX(), gyro.getY(), gyro.getZ());
+            gyro_eigen = trans.topLeftCorner<3,3>() * gyro_eigen + trans.topRightCorner<3,1>(); 
+            gyro_ave = gyro_ave + gyro_eigen;
+          }
+          acc_ave /= num_legs_; gyro_ave /= num_legs_;
+          // std::cout << "time " << dt.count() << std::endl;
+          // std::cout << "acc " << std::endl << acc_ave << std::endl;
+          // std::cout << "gyro " << std::endl << gyro_ave << std::endl;
+          imu_filter.MadgwickAHRSupdateIMU(gyro_ave(0),gyro_ave(1),gyro_ave(2),acc_ave(0),acc_ave(1), acc_ave(2), dt.count());
+          
+        }
+
         // FBK 2 read fbk positions to legs
         for (int i = 0; i < num_legs_; ++i)
         {
@@ -105,6 +135,8 @@ namespace hebi {
           }
           legs_[i]->setJointAngles(pos_vec);
         }
+
+        prev_fbk_time = latest_fbk_time;
 
       });
       group_->setFeedbackFrequencyHz(fbk_frq_hz_); 
@@ -129,6 +161,11 @@ namespace hebi {
   Eigen::VectorXd Quadruped::getLegJointAngles(int index)
   {
     return legs_[index]->getJointAngle();
+  }
+
+  Eigen::Quaterniond Quadruped::getOrientation()
+  {
+    return imu_filter.getOrientation();
   }
 
   bool Quadruped::planStandUpTraj(double duration_time)
